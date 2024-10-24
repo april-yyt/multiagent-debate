@@ -5,11 +5,15 @@ import time
 import getpass
 from tqdm import tqdm
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+# from transformers import AutoTokenizer, AutoModelForCausalLM
 import datasets
 from promptbench.prompt_engineering.chain_of_thought import ZSCoT, CoT
 from langchain_mistralai import ChatMistralAI
 import promptbench as pb
+from promptbench.prompts.method_oriented import get_prompt
+
+
+
 
 # Constants
 # MODEL_NAME = "mistralai/Mixtral-8x7B-v0.1"
@@ -17,7 +21,7 @@ MODEL_NAME = "open-mixtral-8x7b"
 DATASET_NAME = "gsm8k"
 DATASET_SPLIT = "main"
 CHECKPOINT_DIR = "checkpoints"
-RESULTS_FILE = "results.json"
+RESULTS_FILE = "zscot_results.json"
 MAX_NEW_TOKENS = 512
 
 class MistralModel:
@@ -46,6 +50,7 @@ class MistralModel:
         else:
             messages = [{"role": "user", "content": prompt}]
             response = self.llm.invoke(messages)
+            print(f"RAW RESPONSE: {response}")
             return response.content
 
     def convert_text_to_prompt(self, text, role):
@@ -69,7 +74,7 @@ def load_dataset():
     print("Loading dataset...")
     return pb.DatasetLoader.load_dataset(DATASET_NAME)
 
-def extract_final_answer(text, method):
+def extract_final_answer(text):
     try:
         response_json = json.loads(text)
         return str(response_json.get("answer"))
@@ -99,24 +104,29 @@ def evaluate_model(model, dataset, method, num_samples):
                 print(f"Warning: Skipping item with missing question or answer: {item}")
                 continue
             
-            # Generate prompt based on the method
-            if method == "Base":
-                prompt = model.convert_text_to_prompt(question, "Human")
-            elif method == "ZSCoT":
-                cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False)
-                prompt = cot_method.query(question, model)
-            elif method == "CoT":
-                cot_method = CoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False)
-                prompt = cot_method.query(question, model)
-            else:
-                raise ValueError(f"Unknown method: {method}")
+            
 
             # Retry logic for rate limit errors
             for attempt in range(max_retries):
                 try:
-                    # Generate response
-                    response = model(prompt)
-                    break  # Exit retry loop if successful
+                    # Generate prompt based on the method
+                    if method == "Base":
+                        prompt = model.convert_text_to_prompt(question, "Human")
+                        # Generate response
+                        response = model(prompt)
+                        break
+                    elif method == "ZSCoT":
+                        cot_trigger = get_prompt(['chain_of_thought', 'cot_trigger'])
+                        cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False, cot_trigger=cot_trigger)
+                        response = cot_method.query(question, model)
+                        break
+                    elif method == "CoT":
+                        cot_trigger = get_prompt(['chain_of_thought', 'cot_trigger', 'gsm8k'])
+                        cot_method = CoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False, cot_trigger=cot_trigger)
+                        response = cot_method.query(question, model)
+                        break
+                    else:
+                        raise ValueError(f"Unknown method: {method}")
                 except Exception as e:
                     if "Requests rate limit exceeded" in str(e):
                         wait_time = base_wait_time * (2 ** attempt)
@@ -127,7 +137,7 @@ def evaluate_model(model, dataset, method, num_samples):
 
 
             # Extract final answer
-            predicted_answer = extract_final_answer(response, method)
+            predicted_answer = extract_final_answer(response)
 
             # Compare predicted answer with the correct answer
             is_correct = predicted_answer == answer
@@ -184,7 +194,7 @@ def main():
     num_samples = args.num_samples if args.num_samples is not None else len(dataset)
     print(f"Evaluating on {num_samples} samples")
         
-    methods = ["Base"]
+    methods = ["ZSCoT"]
     final_results = {}
 
     for method in methods:
