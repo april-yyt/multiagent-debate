@@ -21,8 +21,8 @@ MODEL_NAME = "open-mixtral-8x7b"
 DATASET_NAME = "gsm8k"
 DATASET_SPLIT = "main"
 CHECKPOINT_DIR = "checkpoints"
-RESULTS_FILE = "zscot_results.json"
-MAX_NEW_TOKENS = 512
+RESULTS_FILE = "cot_results.json"
+MAX_NEW_TOKENS = 1024
 
 class MistralModel:
     def __init__(self, use_api=True):
@@ -104,8 +104,6 @@ def evaluate_model(model, dataset, method, num_samples):
                 print(f"Warning: Skipping item with missing question or answer: {item}")
                 continue
             
-            
-
             # Retry logic for rate limit errors
             for attempt in range(max_retries):
                 try:
@@ -116,14 +114,13 @@ def evaluate_model(model, dataset, method, num_samples):
                         response = model(prompt)
                         break
                     elif method == "ZSCoT":
-                        cot_trigger = get_prompt(['chain_of_thought', 'cot_trigger'])
-                        cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False, cot_trigger=cot_trigger)
+                        cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False)
                         response = cot_method.query(question, model)
                         break
                     elif method == "CoT":
-                        cot_trigger = get_prompt(['chain_of_thought', 'cot_trigger', 'gsm8k'])
-                        cot_method = CoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False, cot_trigger=cot_trigger)
+                        cot_method = CoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False)
                         response = cot_method.query(question, model)
+                        # print(f"COT response: {response}\n\n")
                         break
                     else:
                         raise ValueError(f"Unknown method: {method}")
@@ -194,7 +191,7 @@ def main():
     num_samples = args.num_samples if args.num_samples is not None else len(dataset)
     print(f"Evaluating on {num_samples} samples")
         
-    methods = ["ZSCoT"]
+    methods = ["CoT"]
     final_results = {}
 
     for method in methods:
