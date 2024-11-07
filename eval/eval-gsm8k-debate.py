@@ -59,17 +59,23 @@ def evaluate_framework(dataset, num_samples, use_api=True, use_ollama=False):
             max_tokens=MAX_NEW_TOKENS,
             mistral_api_key=os.getenv('MISTRAL_API_KEY')
         )
-        agent_b = ChatAnthropic(
-            model="claude-3-5-sonnet-20240620",
+        agent_b = ChatMistralAI( 
+            model=MODEL_NAME,
             temperature=0,
             max_tokens=MAX_NEW_TOKENS,
-            anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
+            mistral_api_key=os.getenv('MISTRAL_API_KEY')
         )
-        agent_c = ChatAnthropic(
-            model="claude-3-5-sonnet-20240620",
+        # ChatAnthropic(
+        #     model="claude-3-5-sonnet-20240620",
+        #     temperature=0,
+        #     max_tokens=MAX_NEW_TOKENS,
+        #     anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
+        # )
+        agent_c = ChatMistralAI( 
+            model=MODEL_NAME,
             temperature=0,
             max_tokens=MAX_NEW_TOKENS,
-            anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
+            mistral_api_key=os.getenv('MISTRAL_API_KEY')
         )
     
     # Create debate framework with three agents
