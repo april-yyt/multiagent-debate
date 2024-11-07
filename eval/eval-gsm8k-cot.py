@@ -11,9 +11,7 @@ from promptbench.prompt_engineering.chain_of_thought import ZSCoT, CoT
 from langchain_mistralai import ChatMistralAI
 import promptbench as pb
 from promptbench.prompts.method_oriented import get_prompt
-
-
-
+from langchain_ollama.llms import OllamaLLM
 
 # Constants
 # MODEL_NAME = "mistralai/Mixtral-8x7B-v0.1"
@@ -21,13 +19,21 @@ MODEL_NAME = "open-mixtral-8x7b"
 DATASET_NAME = "gsm8k"
 DATASET_SPLIT = "main"
 CHECKPOINT_DIR = "checkpoints"
-RESULTS_FILE = "cot_results.json"
+RESULTS_FILE = "1106_results_gsm8k.json"
 MAX_NEW_TOKENS = 1024
 
 class MistralModel:
-    def __init__(self, use_api=True):
+    def __init__(self, use_api=True, use_ollama=False):
         self.use_api = use_api
-        if not use_api:
+        self.use_ollama = use_ollama
+        
+        if use_ollama:
+            print("Using Ollama...")
+            self.model = OllamaLLM(model="mixtral")
+            # test the model
+            print("Testing the model...")
+            print(self.model.invoke("What is the capital of France?"))
+        elif not use_api:
             print("Loading model using PromptBench...")
             self.model = LLMModel(
                 model=MODEL_NAME,
@@ -45,7 +51,11 @@ class MistralModel:
             )
 
     def __call__(self, prompt):
-        if not self.use_api:
+        if self.use_ollama:
+            response = self.model.invoke(prompt)
+            print(f"RAW RESPONSE: {response}")
+            return response
+        elif not self.use_api:
             return self.model(prompt)
         else:
             messages = [{"role": "user", "content": prompt}]
@@ -53,21 +63,26 @@ class MistralModel:
             print(f"RAW RESPONSE: {response}")
             return response.content
 
-    def convert_text_to_prompt(self, text, role):
-        json_instruction = (
-            "Please provide your response in the following JSON format:\n"
-            "{\n"
-            '  "reasoning": "Your step-by-step reasoning process here",\n'
-            '  "answer": "The final numerical answer here"\n'
-            "}\n"
-            'The "reasoning" field should contain your brief explanation, '
-            'while the "answer" field should contain only the final numerical result.'
-            'DO NOT INCLUDE ANYTHING ELSE OTHER THAN THE JSON OUTPUT!!!!!!! \n\n'
-        )
-        return f"{json_instruction}{role.capitalize()}: {text}"
+    def convert_text_to_prompt(self, text, role): # adding role here but would not be used unless for gpt models
+        return str(text) + '\n' 
+        # text_content = str(text)
+        # return f"{text_content}\n\nPlease provide the final NUMERICAL answer after '#### Answer:'."
 
     def concat_prompts(self, prompts):
-        return "\n".join(prompts)
+        # Initialize an empty string to hold all prompts
+        all_prompts = ""
+
+        # Iterate over each keyword argument
+        for arg in prompts:
+            # Check if the argument is a string, and if so, add it to the list
+            if isinstance(arg, str):
+                all_prompts = all_prompts + '\n' + arg
+            else:
+                raise ValueError("All arguments must be strings.")
+
+        return all_prompts
+        # return pb_models.concat_prompts(prompts)
+        # return "\n".join(prompts)
 
 
 def load_dataset():
@@ -76,18 +91,30 @@ def load_dataset():
 
 def extract_final_answer(text):
     try:
-        response_json = json.loads(text)
-        return str(response_json.get("answer"))
-    except json.JSONDecodeError:
-        print(f"Failed to parse JSON from response: {text}")
+        # Define the special marker
+        marker = "##"
+        # Find the position of the marker
+        marker_index = text.find(marker)
+        if marker_index != -1:
+            # Get everything after the marker
+            after_marker = text[marker_index + len(marker):].strip()
+            # Use split to get the first "word" and extract only digits
+            first_token = after_marker.split()[0]
+            # Extract only the numeric part
+            number = ''.join(filter(str.isdigit, first_token))
+            return number if number else None
+        else:
+            print(f"Special marker not found in response: {text}")
+            return None
+    except Exception as e:
+        print(f"Error extracting answer: {str(e)}")
         return None
-
 
 def evaluate_model(model, dataset, method, num_samples):
     results = []
     correct = 0
     total = 0
-    max_retries = 5  # Maximum number of retries
+    max_retries = 20  # Maximum number of retries
     base_wait_time = 2  # Base wait time in seconds
     
     for item in tqdm(dataset[:num_samples], desc=f"Evaluating {method}"):
@@ -105,37 +132,50 @@ def evaluate_model(model, dataset, method, num_samples):
                 continue
             
             # Retry logic for rate limit errors
+            predicted_answer = None
             for attempt in range(max_retries):
                 try:
-                    # Generate prompt based on the method
+                    # Get response from model
                     if method == "Base":
-                        prompt = model.convert_text_to_prompt(question, "Human")
-                        # Generate response
+                        prompt = model.convert_text_to_prompt(question)
                         response = model(prompt)
-                        break
                     elif method == "ZSCoT":
-                        cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False)
+                        cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="arabic numerals", verbose=True)
+                        # check the prompt in the printouts, 
+                        # you might need to edit cot_method.query and make sure output_range is "arabic numerals"
                         response = cot_method.query(question, model)
-                        break
+                        print(f"ZSCoT response: {response}\n\n")
                     elif method == "CoT":
-                        cot_method = CoT(dataset_name=DATASET_NAME, output_range="a number", verbose=False)
+                        cot_method = CoT(dataset_name=DATASET_NAME, output_range="arabic numerals", verbose=True)
+                        # check the prompt in the printouts, 
+                        # you might need to edit cot_method.query and make sure output_range is "arabic numerals"
                         response = cot_method.query(question, model)
-                        # print(f"COT response: {response}\n\n")
-                        break
+                        print(f"COT response: {response}\n\n")
                     else:
                         raise ValueError(f"Unknown method: {method}")
+                    
+                    # Try to extract answer from this response
+                    predicted_answer = extract_final_answer(response)
+                    if predicted_answer is not None:
+                        print(f"Successfully extracted answer on attempt {attempt + 1}")
+                        break
+                    else:
+                        print(f"Failed to extract answer on attempt {attempt + 1}/{max_retries}")
+                        if attempt < max_retries - 1:
+                            print("Retrying with new model inference...")
+                            continue
+                        
                 except Exception as e:
                     if "Requests rate limit exceeded" in str(e):
                         wait_time = base_wait_time * (2 ** attempt)
                         print(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
                         time.sleep(wait_time)
                     else:
-                        raise  # Re-raise if it's not a rate limit error
-
-
-            # Extract final answer
-            predicted_answer = extract_final_answer(response)
-
+                        print(f"Error on attempt {attempt + 1}: {str(e)}")
+                    if attempt < max_retries - 1:
+                        print("Retrying...")
+                    continue
+                        
             # Compare predicted answer with the correct answer
             is_correct = predicted_answer == answer
             if is_correct:
@@ -178,20 +218,24 @@ def save_checkpoint(results, correct, total, method):
 def main():
     parser = argparse.ArgumentParser(description="Evaluate on GSM8K dataset")
     parser.add_argument("--use_api", action="store_true", help="Use OpenAI API instead of local Mistral model")
+    parser.add_argument("--use_ollama", action="store_true", help="Use Ollama local deployment")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
     args = parser.parse_args()
-
-    model = MistralModel(use_api=args.use_api)
-    dataset = load_dataset()
+    
+    if args.use_api and args.use_ollama:
+        raise ValueError("Cannot use both API and Ollama at the same time")
     
     if args.use_api:
         if "MISTRAL_API_KEY" not in os.environ:
             os.environ["MISTRAL_API_KEY"] = getpass.getpass("Enter your Mistral API key: ")
+
+    model = MistralModel(use_api=args.use_api, use_ollama=args.use_ollama)
+    dataset = load_dataset()
             
     num_samples = args.num_samples if args.num_samples is not None else len(dataset)
     print(f"Evaluating on {num_samples} samples")
         
-    methods = ["CoT"]
+    methods = ["ZSCoT", "CoT"]
     final_results = {}
 
     for method in methods:
