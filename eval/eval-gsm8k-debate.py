@@ -47,26 +47,33 @@ def evaluate_framework(dataset, num_samples, use_api=True, use_ollama=False):
     max_retries = 20
     base_wait_time = 2
     
-    # Initialize models
+    # Initialize all three agents
     if use_ollama:
-        llm = OllamaLLM(model="mixtral")
+        agent_a = OllamaLLM(model="mixtral")
+        agent_b = OllamaLLM(model="mixtral")
+        agent_c = OllamaLLM(model="mixtral")
     elif use_api:
-        llm = ChatMistralAI(
+        agent_a = ChatMistralAI(
             model=MODEL_NAME,
             temperature=0,
             max_tokens=MAX_NEW_TOKENS,
             mistral_api_key=os.getenv('MISTRAL_API_KEY')
         )
+        agent_b = ChatAnthropic(
+            model="claude-3-5-sonnet-20240620",
+            temperature=0,
+            max_tokens=MAX_NEW_TOKENS,
+            anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
+        )
+        agent_c = ChatAnthropic(
+            model="claude-3-5-sonnet-20240620",
+            temperature=0,
+            max_tokens=MAX_NEW_TOKENS,
+            anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
+        )
     
-    claude = ChatAnthropic(
-        model="claude-3-5-sonnet-20240620",
-        temperature=0,
-        max_tokens=MAX_NEW_TOKENS,
-        anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
-    )
-    
-    # Create debate framework
-    debate = DebateFramework(llm, claude)
+    # Create debate framework with three agents
+    debate = DebateFramework(agent_a, agent_b, agent_c)
     
     # Evaluate samples
     samples = dataset[:num_samples] if num_samples else dataset
