@@ -1,5 +1,6 @@
 from typing import Dict, Optional
 from dataclasses import dataclass
+from promptbench.prompts.method_oriented import get_prompt
 
 @dataclass
 class DebateResult:
@@ -15,6 +16,7 @@ class DebateFramework:
         self.agent_a = initial_solver  # Agent A - Initial solver
         self.agent_b = critic  # Agent B - Critic
         self.agent_c = summarizer  # Agent C - Final summarizer and solver
+        self.few_shot_examples = get_prompt(['chain_of_thought', 'gsm8k'])
         
     def extract_number(self, text: str) -> Optional[str]:
         """Extract numerical answer from text."""
@@ -36,8 +38,11 @@ class DebateFramework:
 
     def get_initial_solution(self, question: str) -> str:
         """Agent A: Generate initial solution."""
-        prompt = f"""Math problem: {question}
-Provide a step-by-step solution. End with "Therefore, the answer is [NUMBER]."
+        prompt = f"""
+{self.few_shot_examples}
+Q: {question}
+Let's think step by step.
+Please output your answer at the end as ##<your answer (arabic numerals)>
 """
         print("\nAgent A Prompt:")
         print("-" * 80)

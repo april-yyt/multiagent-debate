@@ -19,7 +19,7 @@ MODEL_NAME = "open-mixtral-8x7b"
 DATASET_NAME = "gsm8k"
 DATASET_SPLIT = "main"
 CHECKPOINT_DIR = "checkpoints"
-RESULTS_FILE = "1106_results_gsm8k.json"
+RESULTS_FILE = "1111_results_gsm8k.json"
 MAX_NEW_TOKENS = 1024
 
 class MistralModel:
@@ -31,7 +31,6 @@ class MistralModel:
             print("Using Ollama...")
             self.model = OllamaLLM(model="mixtral")
             # test the model
-            print("Testing the model...")
             print(self.model.invoke("What is the capital of France?"))
         elif not use_api:
             print("Loading model using PromptBench...")
@@ -91,21 +90,28 @@ def load_dataset():
 
 def extract_final_answer(text):
     try:
-        # Define the special marker
+        # First try to find answer with ## marker
         marker = "##"
-        # Find the position of the marker
         marker_index = text.find(marker)
         if marker_index != -1:
-            # Get everything after the marker
             after_marker = text[marker_index + len(marker):].strip()
-            # Use split to get the first "word" and extract only digits
             first_token = after_marker.split()[0]
-            # Extract only the numeric part
             number = ''.join(filter(str.isdigit, first_token))
-            return number if number else None
-        else:
-            print(f"Special marker not found in response: {text}")
-            return None
+            if number:
+                return number
+
+        # If ## marker not found, try "The answer is X" format
+        answer_phrase = "The answer is"
+        answer_index = text.lower().find(answer_phrase.lower())
+        if answer_index != -1:
+            after_phrase = text[answer_index + len(answer_phrase):].strip()
+            # Extract first number found after "The answer is"
+            number = ''.join(filter(str.isdigit, after_phrase.split()[0]))
+            if number:
+                return number
+
+        print(f"No answer format found in response: {text}")
+        return None
     except Exception as e:
         print(f"Error extracting answer: {str(e)}")
         return None
@@ -141,14 +147,10 @@ def evaluate_model(model, dataset, method, num_samples):
                         response = model(prompt)
                     elif method == "ZSCoT":
                         cot_method = ZSCoT(dataset_name=DATASET_NAME, output_range="arabic numerals", verbose=True)
-                        # check the prompt in the printouts, 
-                        # you might need to edit cot_method.query and make sure output_range is "arabic numerals"
                         response = cot_method.query(question, model)
                         print(f"ZSCoT response: {response}\n\n")
                     elif method == "CoT":
                         cot_method = CoT(dataset_name=DATASET_NAME, output_range="arabic numerals", verbose=True)
-                        # check the prompt in the printouts, 
-                        # you might need to edit cot_method.query and make sure output_range is "arabic numerals"
                         response = cot_method.query(question, model)
                         print(f"COT response: {response}\n\n")
                     else:
@@ -235,7 +237,7 @@ def main():
     num_samples = args.num_samples if args.num_samples is not None else len(dataset)
     print(f"Evaluating on {num_samples} samples")
         
-    methods = ["ZSCoT", "CoT"]
+    methods = ["CoT"]
     final_results = {}
 
     for method in methods:

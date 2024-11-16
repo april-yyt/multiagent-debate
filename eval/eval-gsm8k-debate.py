@@ -4,19 +4,19 @@ import argparse
 import time
 import getpass
 from tqdm import tqdm
-from promptbench.prompt_engineering.chain_of_thought import ZSCoT, CoT
+# from promptbench.prompt_engineering.chain_of_thought import ZSCoT, CoT
 import promptbench as pb
-from langchain_mistralai import ChatMistralAI
-from langchain_anthropic import ChatAnthropic
+# from langchain_mistralai import ChatMistralAI
+# from langchain_anthropic import ChatAnthropic
 from langchain_ollama.llms import OllamaLLM
-from agent_debate.basic_debate import DebateFramework
+from agent_debate.fs_debate import DebateFramework
 
 
 # Constants
 MODEL_NAME = "open-mixtral-8x7b"
 DATASET_NAME = "gsm8k"
 CHECKPOINT_DIR = "checkpoints"
-RESULTS_FILE = "debate_results.json"
+RESULTS_FILE = "debate_results_fs.json"
 MAX_NEW_TOKENS = 1024
 
 def load_dataset():
@@ -25,17 +25,28 @@ def load_dataset():
 
 def extract_final_answer(text):
     try:
-        # Define the special marker
+        # First try to find answer with ## marker
         marker = "##"
         marker_index = text.find(marker)
         if marker_index != -1:
             after_marker = text[marker_index + len(marker):].strip()
             first_token = after_marker.split()[0]
             number = ''.join(filter(str.isdigit, first_token))
-            return number if number else None
-        else:
-            print(f"Special marker not found in response: {text}")
-            return None
+            if number:
+                return number
+
+        # If ## marker not found, try "The answer is X" format
+        answer_phrase = "The answer is"
+        answer_index = text.lower().find(answer_phrase.lower())
+        if answer_index != -1:
+            after_phrase = text[answer_index + len(answer_phrase):].strip()
+            # Extract first number found after "The answer is"
+            number = ''.join(filter(str.isdigit, after_phrase.split()[0]))
+            if number:
+                return number
+
+        print(f"No answer format found in response: {text}")
+        return None
     except Exception as e:
         print(f"Error extracting answer: {str(e)}")
         return None
@@ -116,23 +127,28 @@ def evaluate_framework(dataset, num_samples, use_api=True, use_ollama=False):
                     break
             
             if debate_result:
-                # Compare answers
-                is_correct = debate_result.answer == correct_answer
-                if is_correct:
-                    correct += 1
-                
-                results.append({
-                    "question": question,
-                    "correct_answer": correct_answer,
-                    "predicted_answer": debate_result.answer,
-                    "reasoning": debate_result.reasoning,
-                    "is_correct": is_correct,
-                    "full_response": debate_result.full_response
-                })
-                
-                total += 1
-                if total % 100 == 0:
-                    save_checkpoint(results, correct, total)
+                predicted_answer = extract_final_answer(debate_result.reasoning)
+                if predicted_answer:
+                    # Compare answers
+                    is_correct = predicted_answer == correct_answer
+                    if is_correct:
+                        correct += 1
+                    
+                    results.append({
+                        "question": question,
+                        "correct_answer": correct_answer,
+                        "predicted_answer": predicted_answer,
+                        "reasoning": debate_result.reasoning,
+                        "is_correct": is_correct,
+                        "full_response": debate_result.full_response
+                    })
+                    
+                    total += 1
+                    if total % 100 == 0:
+                        save_checkpoint(results, correct, total)
+                else:
+                    print(f"Failed to extract answer from debate result")
+
                     
         except Exception as e:
             print(f"Error processing item: {str(e)}")
