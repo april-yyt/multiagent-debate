@@ -39,7 +39,6 @@ class DebateFramework:
     def get_initial_solution(self, question: str) -> str:
         """Agent A: Generate initial solution."""
         prompt = f"""
-{self.few_shot_examples}
 Q: {question}
 Let's think step by step.
 Please output your answer at the end as ##<your answer (arabic numerals)>
@@ -57,13 +56,16 @@ Please output your answer at the end as ##<your answer (arabic numerals)>
         prompt = f"""Math problem: {question}
 Initial solution: {initial_solution}
 
-Please provide a detailed critique of the initial solution:
+Examples:
+{self.few_shot_examples}
+
+Follow the [Examples], Please provide a detailed critique of the [Initial Solution]:
 1. Is the reasoning correct?
 2. Are there any calculation errors?
 3. Are there better ways to solve this?
 4. What are the key insights that might be missing?
 
-Then, provide your own step-by-step solution if needed.
+Then, provide your own step-by-step solution.
 """
         print("\nAgent B Prompt:")
         print("-" * 80)
