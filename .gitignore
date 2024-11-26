@@ -164,3 +164,7 @@ cython_debug/
 
 .streamlit/
 walk.py
+checkpoints_curated
+checkpoints
+promptbench_env
+results

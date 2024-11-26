@@ -9,7 +9,7 @@ import promptbench as pb
 # from langchain_mistralai import ChatMistralAI
 # from langchain_anthropic import ChatAnthropic
 from langchain_ollama.llms import OllamaLLM
-from agent_debate.fs_debate_b import DebateFramework
+from agent_debate.fs_debate_rep import DebateFramework
 
 
 # Constants
