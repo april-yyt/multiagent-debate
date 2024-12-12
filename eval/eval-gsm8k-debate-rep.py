@@ -51,7 +51,7 @@ def extract_final_answer(text):
         print(f"Error extracting answer: {str(e)}")
         return None
 
-def evaluate_framework(dataset, num_samples, use_api=True, use_ollama=False):
+def evaluate_framework(dataset, num_samples, use_api=False, use_ollama=True, repeats=1):
     results = []
     correct = 0
     total = 0
@@ -102,9 +102,8 @@ def evaluate_framework(dataset, num_samples, use_api=True, use_ollama=False):
             mistral_api_key=os.getenv('MISTRAL_API_KEY')
         )
     
-    # Create debate framework with three agents
-    # debate = DebateFramework(agent_a, agent_b, agent_c)
-    debate = DebateFramework(agent_a, agent_b, agent_c, agent_d, agent_e)
+    # Create debate framework 
+    debate = DebateFramework(agent_a, agent_b, agent_c, agent_d, agent_e, repeats=repeats)
     
     # Evaluate samples
     samples = dataset[:num_samples] if num_samples else dataset
@@ -187,6 +186,7 @@ def main():
     parser.add_argument("--use_api", action="store_true", help="Use Mistral API")
     parser.add_argument("--use_ollama", action="store_true", help="Use Ollama local deployment")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate")
+    parser.add_argument("--repeats", type=int, default=1, help="Number of repetitions for Agents C and D")
     args = parser.parse_args()
     
     if args.use_api and args.use_ollama:
@@ -210,7 +210,8 @@ def main():
         dataset, 
         num_samples,
         use_api=args.use_api,
-        use_ollama=args.use_ollama
+        use_ollama=args.use_ollama,
+        repeats=args.repeats
     )
     
     # Calculate final accuracy

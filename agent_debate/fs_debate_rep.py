@@ -21,6 +21,7 @@ class DebateFramework:
         self.agent_d = second_critic  # Agent D - Second critic
         self.agent_e = summarizer  # Agent E - Final summarizer
         self.few_shot_examples = get_prompt(['chain_of_thought', 'gsm8k'])
+        self.repeats = repeats
 
     def get_initial_solution(self, question: str) -> str:
         """Agent A: Generate initial solution."""
@@ -155,20 +156,48 @@ Your tasks:
     def run_debate(self, question: str) -> Optional[DebateResult]:
         """Run the complete debate process."""
         try:
-            # ... existing initial setup code ...
+            print("\n" + "="*80)
+            print(f"Processing Question: {question}")
+            print("="*80 + "\n")
 
             # Get Agent A's initial solution
+            print("\nAgent A (Initial Solver):")
             initial_solution = self.get_initial_solution(question)
-            
+            print("\nAgent A Response:")
+            print("-" * 80)
+            print(initial_solution)
+            print("-" * 80)
             # Get Agent B's critique
+            print("\nAgent B (Critic):")
             first_critique = self.get_critique(question, initial_solution)
+            print("\nAgent B Response:")
+            print("-" * 80)
+            print(first_critique)
+            print("-" * 80)
             
-            # Get Agent C's alternative solution
-            alternate_solution = self.get_alternate_solution(question, initial_solution, first_critique)
+            # Initialize variables for repeated rounds
+            alternate_solution = None
+            second_critique = None
             
-            # Get Agent D's second critique
-            second_critique = self.get_second_critique(question, initial_solution, first_critique, alternate_solution)
-            
+            for repeat_num in range(self.repeats):
+                print(f"\n=== Repetition {repeat_num + 1}/{self.repeats} ===")
+                
+                # Get Agent C's alternative solution
+                print("\nAgent C (Alternative Solver):")
+                alternate_solution = self.get_alternate_solution(question, initial_solution, first_critique)
+                print("\nAgent C Response:")
+                print("-" * 80)
+                print(alternate_solution)
+                print("-" * 80)
+                
+                # Get Agent D's second critique
+                print("\nAgent D (Second Critic):")
+                second_critique = self.get_second_critique(question, initial_solution, first_critique, alternate_solution)
+                print("\nAgent D Response:")
+                print("-" * 80)
+                print(second_critique)
+                print("-" * 80)
+
             # Get Agent E's final summary
             all_responses = {
                 "initial_solution": initial_solution,
@@ -177,6 +206,10 @@ Your tasks:
                 "second_critique": second_critique
             }
             final_response = self.get_final_summary(question, all_responses)
+            print("\nAgent E (Final Summarizer):")
+            print("-" * 80)
+            print(final_response)
+            print("-" * 80)
 
             # Extract final numerical answer
             final_number = self.extract_number(final_response)
