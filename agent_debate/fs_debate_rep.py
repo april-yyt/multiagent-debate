@@ -14,7 +14,7 @@ class DebateResult:
     full_response: Dict
 
 class DebateFramework:
-    def __init__(self, initial_solver, critic, alternate_solver, second_critic, summarizer):
+    def __init__(self, initial_solver, critic, alternate_solver, second_critic, summarizer, repeats):
         self.agent_a = initial_solver  # Agent A - Initial solver
         self.agent_b = critic  # Agent B - Critic
         self.agent_c = alternate_solver  # Agent C - Alternative solver

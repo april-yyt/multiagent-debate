@@ -1,17 +1,24 @@
 #!/bin/bash
 
+# Change to repository root directory (assuming script is in repo)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 # Set up virtual environment
 echo "Setting up virtual environment..."
-python -m venv debate_env
+# python -m venv debate_env
 source debate_env/bin/activate
 
 # Install requirements
-echo "Installing requirements..."
-pip install -r requirements.txt
+# echo "Installing requirements..."
+# pip install -r requirements.txt
 
 # Create results directory
 RESULTS_DIR="debate_results_$(date +%Y%m%d_%H%M%S)"
 mkdir -p $RESULTS_DIR
+
+# Add PYTHONPATH to include repository root
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
 
 # Run experiments with different repeat values
 for repeat in {1..10}; do
